@@ -1,127 +1,6 @@
-setwd("~/Documents/Programming/Shiny_Dashboard_ITUB4")
-
-
-library(DBI)
-library(shiny)
-library(shinydashboard)
-library(dplyr)
-library(shinyWidgets)
-library(ggplot2)
-library(tidyr)
-library(DT)
-library(sqldf)
-
-# Connect to the PostgreSQL database
-
-connection = dbConnect(RPostgres::Postgres(), 
-                       dbname = 'financial', 
-                       host = 'localhost', 
-                       port = 5432, 
-                       user = 'postgres', 
-                       password = '8273')
-
-# Fetch the data from the database
-data = dbGetQuery(connection, "SELECT * FROM data1")
-data2 = dbGetQuery(connection, "SELECT * FROM data2")
-
-
-View(data)
-View(data2)
-
-
-
-
-
-#Now that we have the data, we will build the dashboard 
-
-# UI ----------------------------------------------------------------------
-
-
-ui = dashboardPage(
-  dashboardHeader(title = "Empresa"),
-  dashboardSidebar(
-    sidebarMenu(
-      menuItem("Resumo", tabName = "overview", icon = icon("dashboard")), 
-      menuItem("DRE", tabName = "dre", icon = icon("file-invoice-dollar"))
-    )
-  ), 
-  dashboardBody(
-    tabItems(
-      tabItem(tabName = "overview", 
-              fluidRow(
-                # First column (for year selection)
-                column(width = 6,
-                       checkboxGroupButtons(
-                         inputId = "ano_picker",
-                         label = "Selecione o ano:",
-                         choices = c("2023", "2024"),
-                         justified = TRUE)
-                ),
-                
-                # Second column (for quarter selection)
-                column(width = 6,
-                       checkboxGroupButtons(
-                         inputId = "trimestre_picker",
-                         label = "Selecione o trimestre:",
-                         choices = c("1", "2", "3", "4"),
-                         justified = TRUE)
-                )
-              ),
-              h2("Painel Gerencial"), 
-              fluidRow(
-                valueBoxOutput("variacaocaixa", width = 3),
-                valueBoxOutput("caixa", width = 3),
-                valueBoxOutput("ativo", width = 3),
-                valueBoxOutput("passivo", width = 3),
-                valueBoxOutput("patrimonioliquido", width = 3),
-                valueBoxOutput("receitabruta", width = 3),
-                valueBoxOutput("perdasfinanceiras", width = 3),
-                valueBoxOutput("receitaliquida", width = 3),
-                valueBoxOutput("despesaoperacional", width = 3),
-                valueBoxOutput("EBIT", width = 3), 
-                valueBoxOutput("lucroliquido", width = 3),
-                valueBoxOutput("margemebit", width = 3),
-                valueBoxOutput("margemliquida", width = 3),
-                valueBoxOutput("ROE", width = 3)
-              ),
-              fluidRow(
-                box(plotOutput("lucroliquidoplot", height = 350, width = NULL)), 
-                box(plotOutput("receitamargens", height = 350, width = NULL))
-              )),
-      tabItem(tabName = "dre", h2("Demonstração do Resultado do Exercício (DRE)"),
-              fluidRow(
-                column(width = 12,
-                       box(DT::dataTableOutput("dre_table"), width = NULL)  # Placeholder for DRE table output
-                       )
-              ),
-              fluidRow(
-                column(width = 12, 
-                       box(plotOutput("dre_plot", height = 350), width = NULL)  # Placeholder for DRE plot output
-                       )
-              )
-            )
-          )
-        )
-     )
-
-
-
-
-# Server ------------------------------------------------------------------
-
-
-
 server = function(input, output) {
-  select_year = function(df, year) {
-    df %>% 
-      select(id, matches(paste0("^[1-4]T(", paste(year, collapse = "|"), ")$")))
-      
-  }
-  select_quarter = function(df_year, quarter) {
-    df_year %>% 
-      select(id, matches(paste0("^(", paste(quarter, collapse = "|"), ")T\\d{4}$")))
-     
-  }
+
+  data = get("client_data", envir = .GlobalEnv)
   
   
   output$variacaocaixa <- renderValueBox({
@@ -135,7 +14,7 @@ server = function(input, output) {
     # Filter data (non-reactive operations)
     dfc_year <- select_year(data, selected_years)  # dfc must be a dataframe, not a function
     dfc_quarter <- select_quarter(dfc_year, selected_quarters)
-  
+    
     
     # Calculate value
     
@@ -471,7 +350,7 @@ server = function(input, output) {
   receita_bruta = data[data$id == "receita_bruta", -1] %>% 
     unlist() %>% 
     as.numeric()
- 
+  
   
   output$lucroliquidoplot = renderPlot({
     ggplot(data = data.frame(lucro), aes(x = labels, y = lucro)) + 
@@ -486,7 +365,7 @@ server = function(input, output) {
         plot.title = element_text(hjust = 0.5)
       )
     
-      
+    
   })
   output$receitamargens <- renderPlot({
     # Extract and convert values
@@ -594,9 +473,9 @@ server = function(input, output) {
         values_to = "Valor"
       ) %>%
       # Ensure Metrica is a factor with correct levels
-        mutate(Metrica = factor(Metrica, 
-                          levels = c("Receita", "EBIT", "Lucro"),
-                          labels = c("Receita Bruta", "EBIT", "Lucro Líquido")))
+      mutate(Metrica = factor(Metrica, 
+                              levels = c("Receita", "EBIT", "Lucro"),
+                              labels = c("Receita Bruta", "EBIT", "Lucro Líquido")))
     
     ggplot(df_long, aes(x = Trimestres, y = Valor, fill = Metrica)) +
       geom_area(position = "stack", color = "black", alpha = 0.3, na.rm = TRUE) +
@@ -606,11 +485,9 @@ server = function(input, output) {
            fill = "Métrica") +
       theme_bw()
     
-  
+    
     
   })
   
   
 }
-# Run the application
-shinyApp(ui = ui, server = server) 
